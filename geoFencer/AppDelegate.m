@@ -1,10 +1,4 @@
-//
-//  AppDelegate.m
-//  geoFencer
-//
-//  Created by James on 4/28/12.
-//  Copyright (c) 2012 __MyCompanyName__. All rights reserved.
-//
+//  Created by James Graham on 4/29/12
 
 #import "AppDelegate.h"
 
