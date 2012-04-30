@@ -1,0 +1,253 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="chrome=1">
+    <title>Adding Boundaries to MKMapView by jamgraham</title>
+    <link rel="stylesheet" href="stylesheets/styles.css">
+    <link rel="stylesheet" href="stylesheets/pygment_trac.css">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.7.1/jquery.min.js"></script>
+    <script src="javascripts/main.js"></script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+
+  </head>
+  <body>
+
+      <header>
+        <h1>Adding Boundaries to MKMapView</h1>
+        <p>Geofencing with MKMapView</p>
+      </header>
+
+      <div id="banner">
+        <span id="logo"></span>
+
+        <a href="https://github.com/jamgraham/geoFencer" class="button fork"><strong>Fork On GitHub</strong></a>
+        <div class="downloads">
+          <span>Downloads:</span>
+          <ul>
+            <li><a href="https://github.com/jamgraham/geoFencer/zipball/master" class="button">ZIP</a></li>
+            <li><a href="https://github.com/jamgraham/geoFencer/tarball/master" class="button">TAR</a></li>
+          </ul>
+        </div>
+
+      </div><!-- end banner -->
+
+    <div class="wrapper">
+      <nav>
+        <ul></ul>
+      </nav>
+      <section>
+        <p>I worked on a project with a requirement to lock the boundaries of MKMapView. As there is no out-of-the-box solution provided by apple we are left subclassing MKMapView.  This is pretty easy and gives you access to the UIScrollView that lives in the map and other fun objects in the MKMapView.</p>
+
+<p>Want to look at the code now?  It's available here: <a href="https://github.com/jamgraham/geoFencer">https://github.com/jamgraham/geoFencer</a></p>
+
+<p>Locking the boundaries of the a MKMapView invokes two general steps.  First is to lock the zoom level to a min and max. Second is to prevent the user from scrolling outside the foundry you create.  Lets walk through these by looking at the delegates we need to override</p>
+
+<h2>1. Zoom Level</h2>
+
+<p>This is pretty straight forward.  The goal is the check the zoom level as the user zooms and again when the user stops zooming.</p>
+
+<pre><code> -(void)scrollViewDidZoom:(UIScrollView *)scrollView;
+ -(void)scrollViewDidEndZooming:(UIScrollView *)scrollView withView:(UIView *)view atScale:(float)scale;
+</code></pre>
+
+<h2>2. Scrolling boundaries</h2>
+
+<p>This is a bit more complex.  As the user scrolls around the map in the UIScrollView we want to make sure they do not go outside the boundaries and if they do we want to stop them.  We can achieve this by repositioning the map to the boundary when we see the user go outside the boundary.  This happens fast enough where the users feels like they've hit a wall rather than the map jerking around.  Here are the delegates we need to watch for:</p>
+
+<pre><code> -(void)scrollViewDidScroll:(UIScrollView *)scrollView;
+ -(void)scrollViewDidEndDecelerating:(UIScrollView *)scrollView;
+</code></pre>
+
+<h2>3. Copy &amp; Paste</h2>
+
+<p>Feel free to copy and paste the custom MKMapView below. In the UIViewController that show the map the custom map view needs the boundaries set</p>
+
+<h2>ViewController.m</h2>
+
+<pre><code>    //Set map boundaries
+    mapView.showsUserLocation = YES;
+    [mapViewsetZoomMax:0.015551];
+    [mapViewsetZoomMin: 0.346360];
+    mapView.top = 37.773498;
+    mapView.bottom = 37.745130;
+    mapView.left = -122.430365;
+    mapView.right = -122.401623;
+</code></pre>
+
+<h2>GeoMapView.h</h2>
+
+<pre><code>@interface GeoMapView : MKMapView
+{
+    MKCoordinateRegion cordRegion;
+    CLLocationCoordinate2D oldcenter;
+    double left;
+    double right;
+    double top;
+    double bottom;
+    double zoomMax;
+    double zoomMin;
+}
+
+-(void)checkZoom;
+-(void)checkScroll;
+
+@property (nonatomic) double left;
+@property (nonatomic) double right;
+@property (nonatomic) double top;
+@property (nonatomic) double bottom;
+@property (nonatomic) double zoomMax;
+@property (nonatomic) double zoomMin;
+
+@end
+</code></pre>
+
+<h2>GeoMapView.m</h2>
+
+<pre><code>#import "GeoMapView.h"
+
+@implementation GeoMapView
+@synthesize  left, right, top, bottom,zoomMax,zoomMin;
+
+- (id)initWithFrame:(CGRect)frame
+{
+    self = [superinitWithFrame:frame];
+    if (self) {
+
+    }
+    returnself;
+}
+
+-(void)scrollViewDidZoom:(UIScrollView *)scrollView {
+    [selfcheckZoom];    
+}
+
+
+-(void)checkZoom{
+    UIScrollView * scroll = [[[[selfsubviews] objectAtIndex:0] subviews] objectAtIndex:0];
+
+    if (scroll.zoomScale &lt; zoomMax) {
+        NSLog(@"Reached Max Zoom");
+        [scroll setZoomScale:zoomMaxanimated:NO];
+    }
+
+    if (scroll.zoomScale &gt;= zoomMin) {
+        NSLog(@"Reached Min Zoom");
+        [scroll setZoomScale:zoomMinanimated:NO];
+
+    }
+}
+
+-(void)scrollViewDidEndZooming:(UIScrollView *)scrollView withView:(UIView *)view atScale:(float)scale
+{
+    UIScrollView * scroll = [[[[selfsubviews] objectAtIndex:0] subviews] objectAtIndex:0];
+
+    if (scroll.zoomScale &gt; zoomMin) {
+        [scroll setZoomScale:zoomMinanimated:NO];
+    }   
+}
+
+-(void)scrollViewDidScroll:(UIScrollView *)scrollView {
+
+    [selfcheckScroll];
+
+}
+
+-(void)scrollViewDidEndDecelerating:(UIScrollView *)scrollView{
+    [selfcheckScroll];
+}
+
+-(void)checkScroll{
+    @try{
+        cordRegion = self.region;
+
+        CLLocationCoordinate2D center = self.region.center;
+        CLLocationCoordinate2D northWestCorner, southEastCorner;
+        northWestCorner.latitude  = center.latitude  + (self.region.span.latitudeDelta  / 2.0);
+        northWestCorner.longitude = center.longitude - (self.region.span.longitudeDelta / 2.0);
+        southEastCorner.latitude  = center.latitude  - (self.region.span.latitudeDelta  / 2.0);
+        southEastCorner.longitude = center.longitude + (self.region.span.longitudeDelta / 2.0);
+
+        CLLocationCoordinate2D newcenter;
+        newcenter.latitude = self.region.center.latitude;
+        newcenter.longitude = self.region.center.longitude;
+
+        //LEFT
+        CLLocationDegrees farLeft = left;
+        CLLocationDegrees snapToLeft = farLeft + (self.region.span.longitudeDelta  / 2.0);
+        if (northWestCorner.longitude &lt; farLeft)
+        {
+            newcenter.longitude = snapToLeft;
+            cordRegion = self.region;
+        }
+
+        //RIGHT
+        CLLocationDegrees r = (self.region.span.longitudeDelta / 2.0);
+        CLLocationDegrees farRight = right;
+        CLLocationDegrees snapToRight = farRight - r;
+        if (southEastCorner.longitude &gt; farRight)
+        {
+            newcenter.longitude = snapToRight;
+        }
+
+        //TOP
+        CLLocationDegrees farTop = top;
+        CLLocationDegrees snapToTop = top - (self.region.span.latitudeDelta  / 2.0);
+        if (northWestCorner.latitude &gt; farTop)
+        {
+            newcenter.latitude = snapToTop;
+        }
+
+        //BOTTOM
+        CLLocationDegrees farBottom = bottom;
+        CLLocationDegrees rr = (self.region.span.latitudeDelta  / 2.0);
+        CLLocationDegrees snapToBottom = bottom + rr;
+        if (southEastCorner.latitude &lt; farBottom)
+        {            
+            newcenter.latitude = snapToBottom;
+        }
+
+        [selfsetCenterCoordinate:newcenter  animated:NO];
+
+    }
+    @catch (NSException *e) {
+    }
+    @finally {}
+}
+
+
+@end
+</code></pre>
+
+<h2>Ideas</h2>
+
+<p>There's a lot of cool stuff going on in geofencing right now. Some ideas:</p>
+
+<ul>
+<li>Enter an address and lock  the map to that address</li>
+<li>Geofencing with map overlays</li>
+<li>Physical games that unlock areas of the map as the user actually visits those physical places.</li>
+</ul>
+      </section>
+      <footer>
+        <p>Project maintained by <a href="https://github.com/jamgraham">jamgraham</a></p>
+        <p><small>Hosted on GitHub Pages &mdash; Theme by <a href="http://twitter.com/#!/michigangraham">mattgraham</a></small></p>
+      </footer>
+    </div>
+    <!--[if !IE]><script>fixScale(document);</script><!--<![endif]-->
+              <script type="text/javascript">
+            var gaJsHost = (("https:" == document.location.protocol) ? "https://ssl." : "http://www.");
+            document.write(unescape("%3Cscript src='" + gaJsHost + "google-analytics.com/ga.js' type='text/javascript'%3E%3C/script%3E"));
+          </script>
+          <script type="text/javascript">
+            try {
+              var pageTracker = _gat._getTracker("UA-31278850-1");
+            pageTracker._trackPageview();
+            } catch(err) {}
+          </script>
+
+  </body>
+</html>
